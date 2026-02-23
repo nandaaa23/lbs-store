@@ -1,0 +1,118 @@
+.tableContainer {
+  background: var(--color-bg-elevated);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  border: 1px solid var(--color-border-light);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table thead {
+  background: var(--color-bg);
+}
+
+.table th {
+  padding: 0.875rem 1rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-secondary);
+}
+
+.table td {
+  padding: 0.875rem 1rem;
+  border-top: 1px solid var(--color-border-light);
+}
+
+.table tbody tr:hover {
+  background: var(--color-bg);
+}
+
+.tokenCell {
+  font-weight: 700;
+  color: var(--color-primary-dark);
+  background: var(--color-primary-light);
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
+  display: inline-block;
+  font-size: 0.9375rem;
+}
+
+.itemsList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.itemsList li {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  margin-bottom: 0.25rem;
+}
+
+.actionButton {
+  background: var(--color-primary);
+  color: white;
+  padding: 0.5rem 0.875rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  transition: var(--transition);
+}
+
+.actionButton:hover:not(:disabled) {
+  background: var(--color-primary-dark);
+}
+
+.completedText {
+  color: var(--color-success);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.emptyState {
+  padding: 3rem 2rem;
+  text-align: center;
+}
+
+.emptyIcon {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 1rem;
+  color: var(--color-text-muted);
+  opacity: 0.5;
+}
+
+.emptyTitle {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 0.375rem;
+}
+
+.emptyText {
+  color: var(--color-text-secondary);
+  font-size: 0.9375rem;
+}
+
+@media (max-width: 768px) {
+  .tableContainer {
+    overflow-x: auto;
+  }
+
+  .table {
+    min-width: 560px;
+  }
+
+  .table th,
+  .table td {
+    padding: 0.75rem 0.625rem;
+    font-size: 0.8125rem;
+  }
+}

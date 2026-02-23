@@ -1,0 +1,77 @@
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+}
+
+.skeletonCard {
+  background: var(--color-bg-elevated);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-xs);
+  border: 1px solid var(--color-border-light);
+}
+
+.skeletonImage {
+  width: 100%;
+  padding-top: 75%;
+  background: linear-gradient(
+    90deg,
+    var(--color-bg) 0%,
+    var(--color-border-light) 50%,
+    var(--color-bg) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+.skeletonContent {
+  padding: 0.75rem;
+}
+
+.skeletonLine {
+  height: 14px;
+  background: linear-gradient(
+    90deg,
+    var(--color-bg) 0%,
+    var(--color-border-light) 50%,
+    var(--color-bg) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
+}
+
+.skeletonButton {
+  height: 36px;
+  background: linear-gradient(
+    90deg,
+    var(--color-bg) 0%,
+    var(--color-border-light) 50%,
+    var(--color-bg) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+  margin-top: 0.75rem;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@media (min-width: 640px) {
+  .grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.25rem;
+  }
+}
