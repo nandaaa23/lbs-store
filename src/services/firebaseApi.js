@@ -73,9 +73,33 @@ export const listenToOrders = (callback) => {
 };
 
 export const markOrderServed = async (id) => {
-  await updateDoc(doc(db, "orders", id), {
-    status: "served"
-  });
+  // 1. Get the order to find its items
+  const orderSnap = await getDocs(ordersRef);
+  const order = orderSnap.docs
+    .find(d => d.id === id)
+    ?.data();
+
+  // 2. Decrement stock for each item sold
+  if (order?.items) {
+    await Promise.all(
+      order.items.map(async (cartItem) => {
+        const itemRef = doc(db, "items", cartItem.id);
+        const itemSnap = await getDocs(collection(db, "items"));
+        const itemData = itemSnap.docs.find(d => d.id === cartItem.id)?.data();
+
+        if (itemData) {
+          const newStock = Math.max(0, itemData.stock - cartItem.quantity);
+          await updateDoc(itemRef, {
+            stock: newStock,
+            inStock: newStock > 0
+          });
+        }
+      })
+    );
+  }
+
+  // 3. Mark order as served
+  await updateDoc(doc(db, "orders", id), { status: "served" });
 };
 
 // ✅ NEW — called automatically when a pending order is older than 20 minutes.
