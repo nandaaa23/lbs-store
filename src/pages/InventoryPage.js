@@ -43,14 +43,6 @@ const PRESET_IMAGES = [
   { label: "Colour Print",    url: "https://images.unsplash.com/photo-1562564055-71e051d33c19?w=400&h=400&fit=crop" },
 ];
 
-const CATEGORIES = ["All", "Snacks", "Stationery", "Print"];
-
-const CATEGORY_RANGES = {
-  Snacks:     [0, 16],
-  Stationery: [16, 24],
-  Print:      [24, 28],
-};
-
 const EMPTY_FORM = { name: "", price: "", stock: "", image: "", category: "Snacks" };
 
 const InventoryPage = () => {
