@@ -44,6 +44,19 @@ export const placeOrder = async (cartItems) => {
 
   const cancelToken = generateCancelToken();
 
+  // ✅ Decrement stock immediately when order is placed
+  await Promise.all(
+    cartItems.map(async (cartItem) => {
+      const itemRef = doc(db, "items", cartItem.id);
+      const itemSnap = await getDoc(itemRef);
+      const itemData = itemSnap.data();
+      if (itemData) {
+        const newStock = Math.max(0, itemData.stock - cartItem.quantity);
+        await updateDoc(itemRef, { stock: newStock, inStock: newStock > 0 });
+      }
+    })
+  );
+
   const docRef = await addDoc(ordersRef, {
     token: String(nextNumber),
     date: today,
@@ -67,6 +80,7 @@ export const listenToOrders = (callback) => {
   });
 };
 
+// ✅ markOrderServed no longer touches stock — already decremented on placement
 export const markOrderServed = async (id) => {
   const orderRef = doc(db, "orders", id);
   const orderSnap = await getDoc(orderRef);
@@ -74,20 +88,6 @@ export const markOrderServed = async (id) => {
 
   if (!order) throw new Error("Order not found");
   if (order.status !== "pending") throw new Error("Only pending orders can be marked served");
-
-  if (order.items) {
-    await Promise.all(
-      order.items.map(async (cartItem) => {
-        const itemRef = doc(db, "items", cartItem.id);
-        const itemSnap = await getDoc(itemRef);
-        const itemData = itemSnap.data();
-        if (itemData) {
-          const newStock = Math.max(0, itemData.stock - cartItem.quantity);
-          await updateDoc(itemRef, { stock: newStock, inStock: newStock > 0 });
-        }
-      })
-    );
-  }
 
   await updateDoc(orderRef, { status: "served" });
 };
@@ -119,7 +119,6 @@ export const cancelOrder = async (orderId, callerUid) => {
 
   const order = orderSnap.data();
 
-  // ✅ Caller must provide their uid and it must match the order's uid
   if (!callerUid || !order.uid || callerUid !== order.uid) {
     const err = new Error("Unauthorized: you can only cancel your own orders");
     err.code = "UNAUTHORIZED";
@@ -148,6 +147,21 @@ export const cancelOrder = async (orderId, callerUid) => {
     err.code = "ORDER_NOT_CANCELLABLE";
     err.status = "timeout";
     throw err;
+  }
+
+  // ✅ Restore stock when order is cancelled
+  if (order.items) {
+    await Promise.all(
+      order.items.map(async (cartItem) => {
+        const itemRef = doc(db, "items", cartItem.id);
+        const itemSnap = await getDoc(itemRef);
+        const itemData = itemSnap.data();
+        if (itemData) {
+          const newStock = itemData.stock + cartItem.quantity;
+          await updateDoc(itemRef, { stock: newStock, inStock: newStock > 0 });
+        }
+      })
+    );
   }
 
   await updateDoc(orderRef, { status: "cancelled" });

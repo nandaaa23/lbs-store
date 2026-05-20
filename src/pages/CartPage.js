@@ -15,24 +15,31 @@ const CartPage = ({ cart = [], onUpdateQuantity, onClearCart }) => {
   );
 
   const handlePlaceOrder = async () => {
-    if (cart.length === 0) return;
+  if (cart.length === 0) return;
 
-    setIsPlacingOrder(true);
-    try {
-      const result = await placeOrder(cart);
-      onClearCart();
-      navigate('/token', { state: { token: result.token, orderId: result.orderId } });
-    } catch (error) {
-      console.error('ORDER ERROR:', error);
-      if (error.code === 'permission-denied') {
-        alert('Firebase permission issue. Check Firestore rules.');
-      } else {
-        alert(error.message || 'Failed to place order');
+  setIsPlacingOrder(true);
+  try {
+    const result = await placeOrder(cart);
+    onClearCart();
+    // ✅ pass cancelToken too
+    navigate('/token', {
+      state: {
+        token: result.token,
+        orderId: result.orderId,
+        cancelToken: result.cancelToken
       }
-    } finally {
-      setIsPlacingOrder(false);
+    });
+  } catch (error) {
+    console.error('ORDER ERROR:', error);
+    if (error.code === 'permission-denied') {
+      alert('Firebase permission issue. Check Firestore rules.');
+    } else {
+      alert(error.message || 'Failed to place order');
     }
-  };
+  } finally {
+    setIsPlacingOrder(false);
+  }
+};
 
   if (cart.length === 0) {
     return (
