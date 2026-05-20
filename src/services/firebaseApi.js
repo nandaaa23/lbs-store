@@ -1,130 +1,182 @@
 import {
-  collection,
-  addDoc,
-  onSnapshot,
-  updateDoc,
-  doc,
-  getDocs,
-  serverTimestamp
+  collection, addDoc, onSnapshot, updateDoc,
+  doc, getDocs, serverTimestamp, query, orderBy, getDoc, setDoc
 } from "firebase/firestore";
-
 import { db, auth } from "../firebase";
 
 const itemsRef = collection(db, "items");
 const ordersRef = collection(db, "orders");
 
-/* =========================
-   ITEMS (Inventory)
-========================= */
+const generateCancelToken = () =>
+  Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
+
+/* === ITEMS === */
 export const getInventory = async () => {
   const snap = await getDocs(itemsRef);
-  return snap.docs
-    .map(d => ({ id: d.id, ...d.data() }))
-    .filter(item => !item.deleted);
+  return snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(item => !item.deleted);
 };
-
 export const addInventoryItem = async (item) => {
-  return await addDoc(itemsRef, {
-    ...item,
-    createdAt: serverTimestamp()
-  });
+  return await addDoc(itemsRef, { ...item, createdAt: serverTimestamp() });
 };
-
 export const updateInventoryItem = async (id, updates) => {
   await updateDoc(doc(db, "items", id), updates);
 };
-
 export const deleteInventoryItem = async (id) => {
   await updateDoc(doc(db, "items", id), { deleted: true });
 };
-
-/* =========================
-   ITEMS (Store — student view)
-========================= */
 export const getItems = async () => {
   const snap = await getDocs(itemsRef);
-  return snap.docs
-    .map(d => ({ id: d.id, ...d.data() }))
-    .filter(item => !item.deleted);
+  return snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(item => !item.deleted);
 };
 
-/* =========================
-   ORDERS
-========================= */
+/* === ORDERS === */
 export const placeOrder = async (cartItems) => {
-  const token = `T-${Math.floor(Math.random() * 900 + 100)}`;
+  const today = new Date().toISOString().slice(0, 10);
+  const snap = await getDocs(ordersRef);
+
+  const todayTokenNumbers = snap.docs
+    .map(d => d.data())
+    .filter(o => o.date === today && o.token)
+    .map(o => parseInt(o.token, 10))
+    .filter(n => !isNaN(n));
+
+  const nextNumber = todayTokenNumbers.length > 0 ? Math.max(...todayTokenNumbers) + 1 : 1;
+
+  const cancelToken = generateCancelToken();
 
   const docRef = await addDoc(ordersRef, {
-    token,
+    token: String(nextNumber),
+    date: today,
     items: cartItems,
     status: "pending",
     uid: auth.currentUser?.uid || null,
+    cancelToken,
     createdAt: serverTimestamp()
   });
 
-  return { token, orderId: docRef.id };
+  return { token: String(nextNumber), orderId: docRef.id, cancelToken };
 };
 
 export const listenToOrders = (callback) => {
   return onSnapshot(ordersRef, (snap) => {
-    const orders = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const orders = snap.docs.map(d => {
+      const { cancelToken, ...safeData } = d.data();
+      return { id: d.id, ...safeData };
+    });
     callback(orders);
   });
 };
 
 export const markOrderServed = async (id) => {
-  // 1. Get the order to find its items
-  const orderSnap = await getDocs(ordersRef);
-  const order = orderSnap.docs
-    .find(d => d.id === id)
-    ?.data();
+  const orderRef = doc(db, "orders", id);
+  const orderSnap = await getDoc(orderRef);
+  const order = orderSnap.data();
 
-  // 2. Decrement stock for each item sold
-  if (order?.items) {
+  if (!order) throw new Error("Order not found");
+  if (order.status !== "pending") throw new Error("Only pending orders can be marked served");
+
+  if (order.items) {
     await Promise.all(
       order.items.map(async (cartItem) => {
         const itemRef = doc(db, "items", cartItem.id);
-        const itemSnap = await getDocs(collection(db, "items"));
-        const itemData = itemSnap.docs.find(d => d.id === cartItem.id)?.data();
-
+        const itemSnap = await getDoc(itemRef);
+        const itemData = itemSnap.data();
         if (itemData) {
           const newStock = Math.max(0, itemData.stock - cartItem.quantity);
-          await updateDoc(itemRef, {
-            stock: newStock,
-            inStock: newStock > 0
-          });
+          await updateDoc(itemRef, { stock: newStock, inStock: newStock > 0 });
         }
       })
     );
   }
 
-  // 3. Mark order as served
-  await updateDoc(doc(db, "orders", id), { status: "served" });
+  await updateDoc(orderRef, { status: "served" });
 };
 
-// ✅ NEW — called automatically when a pending order is older than 20 minutes.
-// Expired orders are excluded from revenue calculations.
 export const markOrderExpired = async (id) => {
-  await updateDoc(doc(db, "orders", id), {
-    status: "expired"
-  });
+  const orderSnap = await getDoc(doc(db, "orders", id));
+  const order = orderSnap.data();
+  await updateDoc(doc(db, "orders", id), { status: "expired" });
+
+  if (order?.token) {
+    const metaSnap = await getDoc(doc(db, "meta", "currentToken"));
+    if (metaSnap.exists() && metaSnap.data().token === order.token) {
+      await setDoc(doc(db, "meta", "currentToken"), { token: null, updatedAt: serverTimestamp() });
+    }
+  }
 };
 
-export const cancelOrder = async (id) => {
-  await updateDoc(doc(db, "orders", id), {
-    status: "cancelled"
-  });
+const CANCEL_WINDOW_MS = 5 * 60 * 1000;
+
+export const cancelOrder = async (orderId, callerUid) => {
+  const orderRef = doc(db, "orders", orderId);
+  const orderSnap = await getDoc(orderRef);
+
+  if (!orderSnap.exists()) {
+    const err = new Error("Order not found");
+    err.code = "ORDER_NOT_FOUND";
+    throw err;
+  }
+
+  const order = orderSnap.data();
+
+  // ✅ Caller must provide their uid and it must match the order's uid
+  if (!callerUid || !order.uid || callerUid !== order.uid) {
+    const err = new Error("Unauthorized: you can only cancel your own orders");
+    err.code = "UNAUTHORIZED";
+    throw err;
+  }
+
+  if (["served", "expired", "cancelled"].includes(order.status)) {
+    const err = new Error(`Order cannot be cancelled because it is ${order.status}`);
+    err.code = "ORDER_NOT_CANCELLABLE";
+    err.status = order.status;
+    throw err;
+  }
+
+  const createdAt = order.createdAt?.toDate?.()
+    ?? (order.createdAt?.seconds ? new Date(order.createdAt.seconds * 1000) : null);
+
+  if (!createdAt) {
+    const err = new Error("Order timestamp missing, cannot verify cancellation window");
+    err.code = "ORDER_NOT_CANCELLABLE";
+    err.status = "timeout";
+    throw err;
+  }
+
+  if (Date.now() - createdAt.getTime() > CANCEL_WINDOW_MS) {
+    const err = new Error("Order cannot be cancelled after 5 minutes");
+    err.code = "ORDER_NOT_CANCELLABLE";
+    err.status = "timeout";
+    throw err;
+  }
+
+  await updateDoc(orderRef, { status: "cancelled" });
 };
 
 export const getOrders = async () => {
-  const snap = await getDocs(ordersRef);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const snap = await getDocs(query(ordersRef, orderBy("createdAt", "asc")));
+  return snap.docs.map(d => {
+    const { cancelToken, ...safeData } = d.data();
+    return { id: d.id, ...safeData };
+  });
+};
+
+export const setCurrentToken = async (token) => {
+  try {
+    await setDoc(doc(db, "meta", "currentToken"), { token, updatedAt: serverTimestamp() });
+  } catch (err) {
+    console.error("setCurrentToken failed:", err);
+    throw err;
+  }
+};
+
+export const listenToCurrentToken = (callback) => {
+  return onSnapshot(doc(db, "meta", "currentToken"), (snap) => {
+    callback(snap.exists() ? snap.data().token : null);
+  });
 };
 
 export const getCurrentToken = async () => {
-  const snap = await getDocs(ordersRef);
-  const pending = snap.docs
-    .map(d => d.data())
-    .filter(o => o.status === "pending");
-  return pending.length ? pending[0].token : null;
+  const snap = await getDoc(doc(db, "meta", "currentToken"));
+  return snap.exists() ? snap.data().token : null;
 };

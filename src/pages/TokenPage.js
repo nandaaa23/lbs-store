@@ -3,11 +3,11 @@ import { useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { cancelOrder } from '../services/firebaseApi';
 import TokenDisplay from '../components/TokenDisplay';
 import styles from './TokenPage.module.css';
+import { auth } from '../firebase';
 
 const TokenPage = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  // ✅ Expect both token (display) and orderId (Firestore doc id for cancel)
   const { token, orderId } = location.state || {};
   const [isCancelling, setIsCancelling] = useState(false);
 
@@ -15,26 +15,34 @@ const TokenPage = () => {
     return <Navigate to="/store" replace />;
   }
 
-  const handleCancelOrder = async () => {
-    if (!orderId) {
-      alert('Cannot cancel: order ID missing.');
-      return;
-    }
-    const confirmed = window.confirm('Are you sure you want to cancel this order?');
-    if (!confirmed) return;
+ const handleCancelOrder = async () => {
+  if (!orderId) {
+    alert('Cannot cancel: order ID missing.');
+    return;
+  }
+  if (!window.confirm('Are you sure you want to cancel this order?')) return;
 
-    setIsCancelling(true);
-    try {
-      await cancelOrder(orderId); // ✅ use Firestore doc id, not token string
-      alert(`Order ${token} cancelled successfully.`);
-      navigate('/status');
-    } catch (error) {
-      console.error('Error cancelling order:', error);
+  setIsCancelling(true);
+  try {
+    await cancelOrder(orderId, auth.currentUser?.uid); // ✅ pass uid
+    alert(`Order ${token} cancelled successfully.`);
+    navigate('/status');
+  } catch (error) {
+    console.error('Error cancelling order:', error);
+    if (error.code === 'ORDER_NOT_CANCELLABLE') {
+      alert(error.status === 'timeout'
+        ? 'Orders can only be cancelled within 5 minutes of placing them.'
+        : `This order is already ${error.status}.`
+      );
+    } else if (error.code === 'UNAUTHORIZED') {
+      alert('You are not authorized to cancel this order.');
+    } else {
       alert('Failed to cancel order. Please try again.');
-    } finally {
-      setIsCancelling(false);
     }
-  };
+  } finally {
+    setIsCancelling(false);
+  }
+};
 
   return (
     <div className={styles.page}>
@@ -58,10 +66,7 @@ const TokenPage = () => {
         </div>
 
         <div className={styles.actions}>
-          <button
-            onClick={() => navigate('/status')}
-            className={styles.primaryButton}
-          >
+          <button onClick={() => navigate('/status')} className={styles.primaryButton}>
             Track Order Status
           </button>
           <button
@@ -72,10 +77,7 @@ const TokenPage = () => {
           >
             {isCancelling ? 'Cancelling...' : 'Cancel This Order'}
           </button>
-          <button
-            onClick={() => navigate('/store')} // ✅ /store not /
-            className={styles.secondaryButton}
-          >
+          <button onClick={() => navigate('/store')} className={styles.secondaryButton}>
             Browse More Items
           </button>
         </div>

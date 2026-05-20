@@ -1,20 +1,49 @@
-import React, { useState, useEffect } from 'react';
-import { listenToOrders, markOrderServed, markOrderExpired } from '../services/firebaseApi';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  listenToOrders, markOrderServed, markOrderExpired,
+  setCurrentToken, listenToCurrentToken
+} from '../services/firebaseApi';
 import OrderTable from '../components/OrderTable';
 import styles from './StaffDashboard.module.css';
 
-const EXPIRY_MS = 10 * 60 * 1000; // 20 minutes in milliseconds
+const EXPIRY_MS = 10 * 60 * 1000;
 
 const StaffDashboard = () => {
-  const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all');
+  const [orders, setOrders]               = useState([]);
+  const [loading, setLoading]             = useState(true);
+  const [filter, setFilter]               = useState('all');
+  const [currentToken, setCurrentTokenState] = useState(null);
+  const [settingToken, setSettingToken]   = useState(false);
+
+  // Keep a ref so the expiry interval always sees fresh orders
+  const ordersRef = useRef([]);
 
   useEffect(() => {
-    const unsubscribe = listenToOrders(async (data) => {
-      // Auto-expire any pending orders older than 20 minutes
+    const unsubOrders = listenToOrders((data) => {
+      ordersRef.current = data;
+
+      const sorted = [...data].sort((a, b) => {
+        const dateA = a.createdAt?.toDate?.() ?? new Date(a.createdAt ?? 0);
+        const dateB = b.createdAt?.toDate?.() ?? new Date(b.createdAt ?? 0);
+        if (a.status === 'pending' && b.status !== 'pending') return -1;
+        if (b.status === 'pending' && a.status !== 'pending') return 1;
+        if (a.status === 'pending' && b.status === 'pending') return dateA - dateB;
+        return dateB - dateA;
+      });
+
+      setOrders(sorted);
+      setLoading(false);
+    });
+
+    const unsubToken = listenToCurrentToken((token) => {
+      setCurrentTokenState(token);
+    });
+
+    // ✅ Check for expired orders every 30 seconds on the client
+    // This ensures the UI updates even without a server function
+    const expiryInterval = setInterval(async () => {
       const now = Date.now();
-      for (const order of data) {
+      for (const order of ordersRef.current) {
         if (order.status === 'pending') {
           const createdAt = order.createdAt?.toDate?.() ?? new Date(order.createdAt ?? 0);
           if (now - createdAt.getTime() > EXPIRY_MS) {
@@ -26,112 +55,142 @@ const StaffDashboard = () => {
           }
         }
       }
+    }, 30 * 1000); // every 30 seconds
 
-      const sortedOrders = [...data].sort((a, b) => {
-        // Handle Firestore Timestamps (.toDate()) and plain dates safely
-        const dateA = a.createdAt?.toDate?.() ?? new Date(a.createdAt ?? 0);
-        const dateB = b.createdAt?.toDate?.() ?? new Date(b.createdAt ?? 0);
-        return dateB - dateA;
-      });
+    // Also run immediately on mount
+    const runExpiry = async () => {
+      const now = Date.now();
+      for (const order of ordersRef.current) {
+        if (order.status === 'pending') {
+          const createdAt = order.createdAt?.toDate?.() ?? new Date(order.createdAt ?? 0);
+          if (now - createdAt.getTime() > EXPIRY_MS) {
+            try { await markOrderExpired(order.id); } catch (err) { console.error(err); }
+          }
+        }
+      }
+    };
+    // Small delay so ordersRef is populated first
+    const initTimeout = setTimeout(runExpiry, 2000);
 
-      setOrders(sortedOrders);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
+    return () => {
+      unsubOrders();
+      unsubToken();
+      clearInterval(expiryInterval);
+      clearTimeout(initTimeout);
+    };
   }, []);
 
   const handleMarkServed = async (orderId) => {
-    // orderId is the Firestore doc id, not the token string
     try {
       await markOrderServed(orderId);
     } catch (error) {
-      console.error('Error marking order as served:', error);
-      alert('Failed to update order status');
+      alert(error.message || 'Failed to update order status');
+    }
+  };
+
+  const handleSetCurrentToken = async (token) => {
+    setSettingToken(true);
+    try {
+      await setCurrentToken(token);
+    } catch (err) {
+      alert('Failed to update current token');
+    } finally {
+      setSettingToken(false);
     }
   };
 
   const filteredOrders = orders.filter(order => {
-    if (filter === 'pending') return order.status === 'pending';
-    if (filter === 'served') return order.status === 'served';
+    if (filter === 'pending')   return order.status === 'pending';
+    if (filter === 'served')    return order.status === 'served';
     if (filter === 'cancelled') return order.status === 'cancelled';
-    if (filter === 'expired') return order.status === 'expired';
+    if (filter === 'expired')   return order.status === 'expired';
     return true;
   });
 
-  const pendingCount = orders.filter(o => o.status === 'pending').length;
-  const servedCount = orders.filter(o => o.status === 'served').length;
+  const pendingCount   = orders.filter(o => o.status === 'pending').length;
+  const servedCount    = orders.filter(o => o.status === 'served').length;
   const cancelledCount = orders.filter(o => o.status === 'cancelled').length;
-  const expiredCount = orders.filter(o => o.status === 'expired').length;
+  const expiredCount   = orders.filter(o => o.status === 'expired').length;
 
-  // Revenue only counts orders that are NOT cancelled or expired
-  // i.e. revenue is counted when order is placed (pending or served)
   const totalRevenue = orders
-    .filter(order => order.status !== 'cancelled' && order.status !== 'expired')
-    .reduce((sum, order) => {
-      const orderTotal = (order.items ?? []).reduce(
-        (itemSum, item) => itemSum + (item.price * item.quantity),
-        0
-      );
-      return sum + orderTotal;
-    }, 0);
+    .filter(o => o.status !== 'cancelled' && o.status !== 'expired')
+    .reduce((sum, o) => sum + (o.items ?? []).reduce((s, i) => s + i.price * i.quantity, 0), 0);
+
+  const pendingOrders = orders.filter(o => o.status === 'pending');
 
   return (
     <div className={styles.page}>
       <div className={styles.container}>
+
         <div className={styles.header}>
-          <h1>Order Management</h1>
-          <p>View and manage customer orders</p>
+  <h1>Order Management</h1>
+  <p>View and manage customer orders</p>
+</div>
+
+        {/* Currently Serving Panel */}
+        <div className={styles.currentTokenPanel}>
+          <div className={styles.currentTokenDisplay}>
+            <span className={styles.currentTokenLabel}>Currently Serving</span>
+            <span className={styles.currentTokenValue}>
+              {currentToken ? `#${currentToken}` : '—'}
+            </span>
+          </div>
+
+          <div className={styles.currentTokenActions}>
+            <span className={styles.currentTokenHint}>
+              Tap a token to set it as currently serving:
+            </span>
+            <div className={styles.tokenButtonsGrid}>
+              {pendingOrders.map(order => (
+                <button
+                  key={order.id}
+                  className={`${styles.tokenPickButton} ${currentToken === order.token ? styles.tokenPickActive : ''}`}
+                  onClick={() => handleSetCurrentToken(order.token)}
+                  disabled={settingToken}
+                >
+                  #{order.token}
+                </button>
+              ))}
+              {pendingOrders.length === 0 && (
+                <span className={styles.noTokensHint}>No pending orders</span>
+              )}
+            </div>
+          </div>
         </div>
 
+        {/* Stats */}
         <div className={styles.stats}>
           <div className={`${styles.statCard} ${styles.pending}`}>
-            <span className={styles.statLabel}>Pending Orders</span>
+            <span className={styles.statLabel}>Pending</span>
             <div className={styles.statValue}>{pendingCount}</div>
           </div>
-
           <div className={`${styles.statCard} ${styles.served}`}>
-            <span className={styles.statLabel}>Served Orders</span>
+            <span className={styles.statLabel}>Served</span>
             <div className={styles.statValue}>{servedCount}</div>
           </div>
-
           <div className={`${styles.statCard} ${styles.revenue}`}>
-            <span className={styles.statLabel}>Total Revenue</span>
+            <span className={styles.statLabel}>Revenue</span>
             <div className={styles.statValue}>Rs {totalRevenue.toFixed(2)}</div>
           </div>
         </div>
 
+        {/* Filters */}
         <div className={styles.filters}>
-          <button
-            onClick={() => setFilter('all')}
-            className={`${styles.filterButton} ${filter === 'all' ? styles.active : ''}`}
-          >
-            All Orders ({orders.length})
-          </button>
-          <button
-            onClick={() => setFilter('pending')}
-            className={`${styles.filterButton} ${filter === 'pending' ? styles.active : ''}`}
-          >
-            Pending ({pendingCount})
-          </button>
-          <button
-            onClick={() => setFilter('served')}
-            className={`${styles.filterButton} ${filter === 'served' ? styles.active : ''}`}
-          >
-            Served ({servedCount})
-          </button>
-          <button
-            onClick={() => setFilter('cancelled')}
-            className={`${styles.filterButton} ${filter === 'cancelled' ? styles.active : ''}`}
-          >
-            Cancelled ({cancelledCount})
-          </button>
-          <button
-            onClick={() => setFilter('expired')}
-            className={`${styles.filterButton} ${filter === 'expired' ? styles.active : ''}`}
-          >
-            Expired ({expiredCount})
-          </button>
+          {[
+            ['all',       `All (${orders.length})`],
+            ['pending',   `Pending (${pendingCount})`],
+            ['served',    `Served (${servedCount})`],
+            ['cancelled', `Cancelled (${cancelledCount})`],
+            ['expired',   `Expired (${expiredCount})`],
+          ].map(([val, label]) => (
+            <button
+              key={val}
+              onClick={() => setFilter(val)}
+              className={`${styles.filterButton} ${filter === val ? styles.active : ''}`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
         {loading ? (
