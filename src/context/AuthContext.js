@@ -60,29 +60,21 @@ export const AuthProvider = ({ children }) => {
   const logout = () => signOut(auth);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(
-      auth,
-      async (currentUser) => {
-        if (currentUser) {
-          const docRef = doc(
-            db,
-            "users",
-            currentUser.uid
-          );
-
-          const userSnap = await getDoc(docRef);
-
-          setUser(userSnap.data());
-        } else {
-          setUser(null);
-        }
-
-        setLoading(false);
-      }
-    );
-
-    return unsubscribe;
-  }, []);
+  const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+    if (currentUser) {
+      const docRef = doc(db, "users", currentUser.uid);
+      const userSnap = await getDoc(docRef);
+      setUser({
+        ...userSnap.data(),
+        uid: currentUser.uid  // ✅ always take uid from Firebase Auth, not Firestore
+      });
+    } else {
+      setUser(null);
+    }
+    setLoading(false);
+  });
+  return unsubscribe;
+}, []);
 
   return (
     <AuthContext.Provider

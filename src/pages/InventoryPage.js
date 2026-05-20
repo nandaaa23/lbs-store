@@ -11,36 +11,38 @@ import styles from "./InventoryPage.module.css";
 // ── Stationery & Print ───────────────────────────────────────────────────────
 const PRESET_IMAGES = [
   // SNACKS
-{ label: "Veg Puff",        url: "https://picsum.photos/seed/vegpuff/400/400" },
-{ label: "Chicken Roll",    url: "https://picsum.photos/seed/chickenroll/400/400" },
-{ label: "Samosa",          url: "https://picsum.photos/seed/samosa/400/400" },
-{ label: "Masala Maggi",    url: "https://picsum.photos/seed/maggi/400/400" },
-{ label: "Veg Sandwich",    url: "https://picsum.photos/seed/sandwich/400/400" },
-{ label: "Cold Coffee",     url: "https://picsum.photos/seed/coldcoffee/400/400" },
-{ label: "Lime Juice",      url: "https://picsum.photos/seed/limejuice/400/400" },
-{ label: "Brownie",         url: "https://picsum.photos/seed/brownie/400/400" },
-{ label: "Tea",             url: "https://picsum.photos/seed/tea/400/400" },
-{ label: "Burger",          url: "https://picsum.photos/seed/burger/400/400" },
-{ label: "Pizza Slice",     url: "https://picsum.photos/seed/pizza/400/400" },
-{ label: "Chips / Crisps",  url: "https://picsum.photos/seed/chips/400/400" },
-{ label: "Water Bottle",    url: "https://picsum.photos/seed/waterbottle/400/400" },
-{ label: "Fruit Juice",     url: "https://picsum.photos/seed/fruitjuice/400/400" },
-{ label: "Cookies",         url: "https://picsum.photos/seed/cookies/400/400" },
-{ label: "Instant Noodles", url: "https://picsum.photos/seed/noodles/400/400" },
-  // STATIONERY
-{ label: "Notebook",        url: "https://picsum.photos/seed/notebook/400/400" },
-{ label: "Pen / Pencil",    url: "https://picsum.photos/seed/pen/400/400" },
-{ label: "Highlighters",    url: "https://picsum.photos/seed/highlight/400/400" },
-{ label: "Sticky Notes",    url: "https://picsum.photos/seed/sticky/400/400" },
-{ label: "Stapler",         url: "https://picsum.photos/seed/stapler/400/400" },
-{ label: "Scissors",        url: "https://picsum.photos/seed/scissors/400/400" },
-{ label: "Eraser",          url: "https://picsum.photos/seed/eraser/400/400" },
-{ label: "Ruler",           url: "https://picsum.photos/seed/ruler/400/400" },
-// PRINT
-{ label: "Printed Pages",   url: "https://picsum.photos/seed/printpage/400/400" },
-{ label: "Spiral Binding",  url: "https://picsum.photos/seed/spiral/400/400" },
-{ label: "Lamination",      url: "https://picsum.photos/seed/laminate/400/400" },
-{ label: "Colour Print",    url: "https://picsum.photos/seed/colourprint/400/400" },
+
+{ label: "Veg Puff",        url: "https://images.unsplash.com/photo-1604908177522-0408f8f8e8f4?w=400&h=400&fit=crop" },
+  { label: "Chicken Roll",    url: "https://images.unsplash.com/photo-1626700051175-6818013e1d4f?w=400&h=400&fit=crop" },
+  { label: "Samosa",          url: "https://images.unsplash.com/photo-1601050690117-6a8f9c6a2d7d?w=400&h=400&fit=crop" },
+  { label: "Masala Maggi",    url: "https://images.unsplash.com/photo-1612929633738-8fe44f7ec841?w=400&h=400&fit=crop" },
+  { label: "Veg Sandwich",    url: "https://images.unsplash.com/photo-1553909489-cd47e0ef937f?w=400&h=400&fit=crop" },
+  { label: "Cold Coffee",     url: "https://images.unsplash.com/photo-1529892485617-25f63cd7b1e9?w=400&h=400&fit=crop" },
+  { label: "Lime Juice",      url: "https://images.unsplash.com/photo-1621263764928-df1444c5e859?w=400&h=400&fit=crop" },
+  { label: "Brownie",         url: "https://images.unsplash.com/photo-1606313564200-e75d5e30476c?w=400&h=400&fit=crop" },
+  { label: "Tea",             url: "https://images.unsplash.com/photo-1544787219-7f47ccb76574?w=400&h=400&fit=crop" },
+  { label: "Burger",          url: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&h=400&fit=crop" },
+  { label: "Pizza Slice",     url: "https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=400&h=400&fit=crop" },
+  { label: "Chips / Crisps",  url: "https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=400&h=400&fit=crop" },
+  { label: "Water Bottle",    url: "https://images.unsplash.com/photo-1559839734-2b71ea197ec6?w=400&h=400&fit=crop" },
+  { label: "Fruit Juice",     url: "https://images.unsplash.com/photo-1600271886742-f049cd451bba?w=400&h=400&fit=crop" },
+  { label: "Cookies",         url: "https://images.unsplash.com/photo-1499636136210-6f4ee915583e?w=400&h=400&fit=crop" },
+  { label: "Instant Noodles", url: "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=400&h=400&fit=crop" },
+
+  { label: "Notebook",        url: "https://images.unsplash.com/photo-1531346878377-a5be20888e57?w=400&h=400&fit=crop" },
+  { label: "Pen / Pencil",    url: "https://images.unsplash.com/photo-1583485088034-697b5bc54ccd?w=400&h=400&fit=crop" },
+  { label: "Highlighters",    url: "https://images.unsplash.com/photo-1617957718587-59b41f4fa699?w=400&h=400&fit=crop" },
+  { label: "Sticky Notes",    url: "https://images.unsplash.com/photo-1586281380349-632531db7ed4?w=400&h=400&fit=crop" },
+  { label: "Stapler",         url: "https://images.unsplash.com/photo-1604231800732-c4b4d2cb1567?w=400&h=400&fit=crop" },
+  { label: "Scissors",        url: "https://images.unsplash.com/photo-1603513492128-ba7bc9b3e143?w=400&h=400&fit=crop" },
+  { label: "Eraser",          url: "https://images.unsplash.com/photo-1577741314755-048d8525d31e?w=400&h=400&fit=crop" },
+  { label: "Ruler",           url: "https://images.unsplash.com/photo-1611532736597-de2d4265fba3?w=400&h=400&fit=crop" },
+  // PRINT
+  { label: "Printed Pages",   url: "https://images.unsplash.com/photo-1586953208448-b95a79798f07?w=400&h=400&fit=crop" },
+  { label: "Spiral Binding",  url: "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=400&h=400&fit=crop" },
+  { label: "Lamination",      url: "https://images.unsplash.com/photo-1612198188060-c7c2a3b66eae?w=400&h=400&fit=crop" },
+  { label: "Colour Print",    url: "https://images.unsplash.com/photo-1562564055-71e051d33c19?w=400&h=400&fit=crop" },
+
 ];
 
 const EMPTY_FORM = { name: "", price: "", stock: "", image: "", category: "Snacks" };

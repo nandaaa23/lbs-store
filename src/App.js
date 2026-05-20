@@ -16,7 +16,6 @@ import StaffDashboard from "./pages/StaffDashboard";
 import InventoryPage from "./pages/InventoryPage";
 import SeedItems from "./pages/SeedItems";
 
-// ✅ Separate layout component so Header can call useLocation (needs BrowserRouter context)
 const AppLayout = ({ user, role, cart, onAddToCart, onUpdateQuantity, onClearCart }) => {
   const location = useLocation();
   const hideHeader = ['/login', '/register'].includes(location.pathname);
@@ -25,21 +24,21 @@ const AppLayout = ({ user, role, cart, onAddToCart, onUpdateQuantity, onClearCar
   return (
     <>
       {!hideHeader && <Header cartItemsCount={cartItemsCount} />}
-
       <Routes>
         <Route path="/" element={<Navigate to="/login" />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/seed" element={<SeedItems />} />
 
-        <Route
-          path="/store"
-          element={
-            user && role === "student"
-              ? <StorePage cart={cart} onAddToCart={onAddToCart} />
-              : <Navigate to="/login" />
-          }
-        />
+        {/* Public */}
+        <Route path="/store" element={<StorePage cart={cart} onAddToCart={onAddToCart} />} />
+        <Route path="/token" element={<TokenPage />} />
+        <Route path="/status" element={<StatusPage />} />
+
+        {/* Staff store preview — no auth needed */}
+        <Route path="/staff/store" element={<StorePage cart={[]} onAddToCart={() => {}} />} />
+
+        {/* Student only */}
         <Route
           path="/cart"
           element={
@@ -48,24 +47,15 @@ const AppLayout = ({ user, role, cart, onAddToCart, onUpdateQuantity, onClearCar
               : <Navigate to="/login" />
           }
         />
-        <Route path="/token" element={<TokenPage />} />
-        <Route path="/status" element={<StatusPage />} />
 
+        {/* Staff only */}
         <Route
           path="/staff/dashboard"
-          element={
-            user && role === "staff"
-              ? <StaffDashboard />
-              : <Navigate to="/login" />
-          }
+          element={user && role === "staff" ? <StaffDashboard /> : <Navigate to="/login" />}
         />
         <Route
           path="/staff/inventory"
-          element={
-            user && role === "staff"
-              ? <InventoryPage />
-              : <Navigate to="/login" />
-          }
+          element={user && role === "staff" ? <InventoryPage /> : <Navigate to="/login" />}
         />
       </Routes>
     </>
@@ -73,10 +63,10 @@ const AppLayout = ({ user, role, cart, onAddToCart, onUpdateQuantity, onClearCar
 };
 
 function App() {
-  const [user, setUser] = useState(null);
-  const [role, setRole] = useState(null);
+  const [user, setUser]       = useState(null);
+  const [role, setRole]       = useState(null);
   const [loading, setLoading] = useState(true);
-  const [cart, setCart] = useState([]);
+  const [cart, setCart]       = useState([]);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -97,11 +87,7 @@ function App() {
   const handleAddToCart = (item) => {
     setCart((prev) => {
       const existing = prev.find((c) => c.id === item.id);
-      if (existing) {
-        return prev.map((c) =>
-          c.id === item.id ? { ...c, quantity: c.quantity + 1 } : c
-        );
-      }
+      if (existing) return prev.map((c) => c.id === item.id ? { ...c, quantity: c.quantity + 1 } : c);
       return [...prev, { ...item, quantity: 1 }];
     });
   };
@@ -110,9 +96,7 @@ function App() {
     if (quantity <= 0) {
       setCart((prev) => prev.filter((c) => c.id !== itemId));
     } else {
-      setCart((prev) =>
-        prev.map((c) => (c.id === itemId ? { ...c, quantity } : c))
-      );
+      setCart((prev) => prev.map((c) => c.id === itemId ? { ...c, quantity } : c));
     }
   };
 

@@ -19,6 +19,128 @@
   font-weight: 700;
 }
 
+.servingSection {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 2rem;
+}
+
+.servingCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--color-surface);
+  border: 2px solid var(--color-primary);
+  border-radius: 20px;
+  padding: 2rem 4rem;
+  text-align: center;
+}
+
+.servingLabel {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-text-secondary);
+}
+
+.servingNumber {
+  font-size: 5rem;
+  font-weight: 800;
+  color: var(--color-primary);
+  line-height: 1;
+}
+
+.servingNumberEmpty {
+  font-size: 5rem;
+  font-weight: 800;
+  color: var(--color-text-secondary);
+  line-height: 1;
+}
+
+.liveRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.liveDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  animation: pulse 1.5s infinite;
+}
+
+.liveText {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+
+.statusArea {
+  margin-top: 1.5rem;
+}
+
+.statusCard {
+  border-radius: 16px;
+  padding: 2rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.statusCard h3 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.statusCard p {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+.statusIcon {
+  font-size: 2.5rem;
+  line-height: 1;
+}
+
+.cardServed    { background: #f0fdf4; border: 1px solid #86efac; }
+.cardCurrent   { background: #eff6ff; border: 1px solid #93c5fd; }
+.cardWaiting   { background: #fffbeb; border: 1px solid #fcd34d; }
+.cardNotFound  { background: #fef2f2; border: 1px solid #fca5a5; }
+
+.waitEstimate {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}
+
+.cancelBtn {
+  margin-top: 0.75rem;
+  padding: 8px 20px;
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.cancelBtn:hover { background: #dc2626; }
+.cancelBtn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.cancelNote {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  margin-top: 0.5rem;
+}
+
 .header p {
   color: var(--color-text-secondary);
   font-size: 0.9375rem;

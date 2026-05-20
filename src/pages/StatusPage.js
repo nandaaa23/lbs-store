@@ -1,202 +1,233 @@
 import React, { useState, useEffect } from 'react';
-import { getCurrentToken, getOrders, cancelOrder } from '../services/firebaseApi';
-import TokenDisplay from '../components/TokenDisplay';
+import { listenToOrders, listenToCurrentToken, cancelOrder } from '../services/firebaseApi';
+import { useAuth } from '../context/AuthContext';
 import styles from './StatusPage.module.css';
 
+const CANCEL_WINDOW_MS = 5 * 60 * 1000;
+const EXPIRY_MS        = 10 * 60 * 1000;
+
+const toMs = (v) => {
+  if (!v) return 0;
+  if (typeof v.toDate === 'function') return v.toDate().getTime();
+  if (v.seconds) return v.seconds * 1000;
+  return new Date(v).getTime();
+};
+
 const StatusPage = () => {
+  const { user } = useAuth();
+  const [orders, setOrders]             = useState([]);
   const [currentToken, setCurrentToken] = useState(null);
-  const [userToken, setUserToken] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [orders, setOrders] = useState([]);
+  const [loading, setLoading]           = useState(true);
+  const [userToken, setUserToken]       = useState('');
   const [isCancelling, setIsCancelling] = useState(false);
 
   useEffect(() => {
-    loadCurrentToken();
-    const interval = setInterval(loadCurrentToken, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const loadCurrentToken = async () => {
-    try {
-      const token = await getCurrentToken();
-      const allOrders = await getOrders();
-      setCurrentToken(token);
-      setOrders(allOrders);
-    } catch (error) {
-      console.error('Error loading token:', error);
-    } finally {
+    const unsubOrders = listenToOrders((data) => {
+      setOrders(data);
       setLoading(false);
-    }
-  };
+    });
+    const unsubToken = listenToCurrentToken((token) => {
+      setCurrentToken(token);
+    });
+    return () => { unsubOrders(); unsubToken(); };
+  }, []);
 
   const checkUserToken = () => {
     if (!userToken) return null;
-
     const order = orders.find(o => o.token === userToken);
     if (!order) return 'not-found';
-    if (order.status === 'served') return 'served';
+
+    
+
+    if (order.status === 'served')    return 'served';
     if (order.status === 'cancelled') return 'cancelled';
-    if (order.status === 'expired') return 'expired';
+    if (order.status === 'expired')   return 'expired';
 
-    const pendingOrders = orders.filter(o => o.status === 'pending');
-    const position = pendingOrders.findIndex(o => o.token === userToken);
+    const age = Date.now() - toMs(order.createdAt);
+    if (age > EXPIRY_MS) return 'expired';
 
-    if (position === 0) return 'current';
-    if (position > 0) return position;
+    // ✅ Ownership purely from uid — no localStorage needed
+    const isOwner  = !!(user?.uid && order.uid && user.uid === order.uid);
+    const canCancel = isOwner && age < CANCEL_WINDOW_MS;
+
+    if (currentToken && order.token === currentToken) {
+      return { status: 'current', canCancel, isOwner };
+
+    
+    }
+
+    const pending = orders
+      .filter(o => o.status === 'pending')
+      .sort((a, b) => toMs(a.createdAt) - toMs(b.createdAt));
+
+    const position = pending.findIndex(o => o.token === userToken);
+    if (position >= 0) return { status: 'waiting', position, canCancel, isOwner };
+
     return 'not-found';
   };
 
-  const handleCancelFromStatus = async () => {
-    if (!userToken) {
-      return;
-    }
+  const handleCancel = async () => {
+  if (!userToken) return;
+  const order = orders.find(o => o.token === userToken);
+  if (!order) return;
 
-    const confirmed = window.confirm(`Cancel order ${userToken}?`);
-    if (!confirmed) {
-      return;
-    }
+  // ✅ Must be owner to even reach this — checkUserToken already verified isOwner
+  if (!user?.uid) {
+    alert('You must be logged in to cancel an order.');
+    return;
+  }
 
-    setIsCancelling(true);
-    try {
-      await cancelOrder(userToken);
-      await loadCurrentToken();
-      alert(`Order ${userToken} cancelled successfully.`);
-    } catch (error) {
-      console.error('Error cancelling order:', error);
-      if (error.code === 'ORDER_NOT_CANCELLABLE') {
-        alert(`This order cannot be cancelled because it is ${error.status}.`);
-      } else if (error.code === 'ORDER_NOT_FOUND') {
-        alert('Order not found. Please verify your token.');
-      } else {
-        alert('Failed to cancel order. Please try again.');
-      }
-    } finally {
-      setIsCancelling(false);
+  if (!window.confirm(`Cancel order #${userToken}?`)) return;
+  setIsCancelling(true);
+  try {
+    await cancelOrder(order.id, user.uid); // ✅ pass uid explicitly
+    alert(`Order #${userToken} cancelled.`);
+  } catch (error) {
+    if (error.code === 'UNAUTHORIZED') {
+      alert('You are not authorized to cancel this order.');
+    } else if (error.code === 'ORDER_NOT_CANCELLABLE') {
+      alert(error.status === 'timeout'
+        ? 'Orders can only be cancelled within 5 minutes of placing them.'
+        : `This order is already ${error.status}.`
+      );
+    } else if (error.code === 'ORDER_NOT_FOUND') {
+      alert('Order not found. Please verify your token.');
+    } else {
+      alert('Failed to cancel order. Please try again.');
     }
-  };
-
-  const userTokenStatus = checkUserToken();
-  const pendingCount = orders.filter(o => o.status === 'pending').length;
+  } finally {
+    setIsCancelling(false);
+  }
+};
+  const status = checkUserToken();
 
   return (
     <div className={styles.page}>
       <div className={styles.container}>
+
         <div className={styles.header}>
           <h1>Track Your Order</h1>
-          <p>Monitor the current token and check your order status</p>
+          <p>Enter your token number to check your order status</p>
         </div>
 
-        <div className={styles.currentToken}>
+        <div className={styles.servingSection}>
           {loading ? (
             <div className="loading-spinner"></div>
           ) : currentToken ? (
-            <>
-              <TokenDisplay
-                token={currentToken}
-                label="Currently Serving Token"
-                variant="info"
-              />
-              <div className={styles.liveIndicator}>
-                <div className={styles.liveDot}></div>
-                <span>Live updates every 5 seconds</span>
+            <div className={styles.servingCard}>
+              <span className={styles.servingLabel}>Now Serving</span>
+              <span className={styles.servingNumber}>#{currentToken}</span>
+              <div className={styles.liveRow}>
+                <span className={styles.liveDot}></span>
+                <span className={styles.liveText}>Live</span>
               </div>
-            </>
+            </div>
           ) : (
-            <div className={styles.emptyState}>
-              <h3>No Active Orders</h3>
-              <p>There are no orders being served right now</p>
+            <div className={styles.servingCard}>
+              <span className={styles.servingLabel}>Now Serving</span>
+              <span className={styles.servingNumberEmpty}>—</span>
+              <span className={styles.liveText}>No active orders</span>
             </div>
           )}
         </div>
 
         <div className={styles.checkToken}>
-          <h2>Check Your Token Status</h2>
-
+          <h2>Check Your Status</h2>
           <div className={styles.inputGroup}>
             <input
               type="text"
               value={userToken}
-              onChange={(e) => setUserToken(e.target.value.toUpperCase())}
-              placeholder="Enter your token (e.g., T-105)"
+              onChange={(e) => setUserToken(e.target.value.replace(/\D/g, ''))}
+              placeholder="Enter token number (e.g. 5)"
               className={styles.input}
             />
-            <button
-              onClick={() => setUserToken(userToken)}
-              className={styles.checkButton}
-            >
-              Check
-            </button>
           </div>
 
           {userToken && (
-            <>
-              {userTokenStatus === 'not-found' && (
-                <div className={`${styles.statusMessage} ${styles.notFound}`}>
+            <div className={styles.statusArea}>
+              {status === 'not-found' && (
+                <div className={`${styles.statusCard} ${styles.cardNotFound}`}>
+                  <span className={styles.statusIcon}>❓</span>
                   <h3>Token Not Found</h3>
-                  <p>We couldn't find this token. Please check the number and try again.</p>
+                  <p>No order found for token #{userToken}.</p>
                 </div>
               )}
 
-              {userTokenStatus === 'served' && (
-                <div className={`${styles.statusMessage} ${styles.served}`}>
+              {status === 'served' && (
+                <div className={`${styles.statusCard} ${styles.cardServed}`}>
+                  <span className={styles.statusIcon}>✅</span>
                   <h3>Order Completed!</h3>
-                  <p>Your order has been served. Please collect it from the counter.</p>
+                  <p>Your order has been served. Please collect from the counter.</p>
                 </div>
               )}
 
-              {userTokenStatus === 'cancelled' && (
-                <div className={`${styles.statusMessage} ${styles.notFound}`}>
+              {status === 'cancelled' && (
+                <div className={`${styles.statusCard} ${styles.cardNotFound}`}>
+                  <span className={styles.statusIcon}>❌</span>
                   <h3>Order Cancelled</h3>
-                  <p>This order was cancelled and stock has been restored.</p>
+                  <p>This order was cancelled.</p>
                 </div>
               )}
 
-              {userTokenStatus === 'expired' && (
-                <div className={`${styles.statusMessage} ${styles.notFound}`}>
+              {status === 'expired' && (
+                <div className={`${styles.statusCard} ${styles.cardNotFound}`}>
+                  <span className={styles.statusIcon}>⏰</span>
                   <h3>Order Expired</h3>
-                  <p>This order expired after 10 minutes and stock has been restored.</p>
+                  <p>This order expired after 10 minutes.</p>
                 </div>
               )}
 
-              {userTokenStatus === 'current' && (
-                <div className={`${styles.statusMessage} ${styles.current}`}>
-                  <h3>Your Turn - Come to Counter!</h3>
-                  <p>Your order is being prepared. Please proceed to the counter.</p>
-                  <div className={styles.progressBar}>
-                    <div className={styles.progressFill} style={{ width: '100%' }}></div>
-                  </div>
-                </div>
-              )}
-
-              {typeof userTokenStatus === 'number' && (
-                <div className={`${styles.statusMessage} ${styles.waiting}`}>
-                  <h3>Your Order is in Queue</h3>
+              {status?.status === 'current' && (
+                <div className={`${styles.statusCard} ${styles.cardCurrent}`}>
+                  <span className={styles.statusIcon}>🔔</span>
+                  <h3>{status.isOwner ? 'Your Turn!' : 'Now Serving'}</h3>
                   <p>
-                    There are <strong>{userTokenStatus}</strong> orders ahead of you.
-                    Estimated wait: <strong>~{userTokenStatus * 3} minutes</strong>
+                    Token <strong>#{userToken}</strong> is currently being served.
+                    {status.isOwner && <><br />Please come to the counter now.</>}
                   </p>
-                  <div className={styles.progressBar}>
-                    <div
-                      className={styles.progressFill}
-                      style={{ width: `${Math.max(10, 100 - (userTokenStatus / pendingCount * 100))}%` }}
-                    ></div>
-                  </div>
+                  {status.isOwner ? (
+                    status.canCancel ? (
+                      <button onClick={handleCancel} disabled={isCancelling} className={styles.cancelBtn}>
+                        {isCancelling ? 'Cancelling...' : 'Cancel Order'}
+                      </button>
+                    ) : (
+                      <p className={styles.cancelNote}>⏱ Cancellation window has passed</p>
+                    )
+                  ) : (
+                    <p className={styles.cancelNote}>🔒 This is not your order</p>
+                  )}
                 </div>
               )}
 
-              {(userTokenStatus === 'current' || typeof userTokenStatus === 'number') && (
-                <button
-                  onClick={handleCancelFromStatus}
-                  disabled={isCancelling}
-                  className={styles.checkButton}
-                  style={{ marginTop: '1rem', background: 'var(--color-danger)' }}
-                >
-                  {isCancelling ? 'Cancelling...' : 'Cancel This Order'}
-                </button>
+              {status?.status === 'waiting' && (
+                <div className={`${styles.statusCard} ${styles.cardWaiting}`}>
+                  <span className={styles.statusIcon}>⏳</span>
+                  <h3>{status.isOwner ? 'Your Order is In Queue' : 'Order In Queue'}</h3>
+                  <p>
+                    <strong>{status.position}</strong> order{status.position > 1 ? 's' : ''} ahead
+                  </p>
+                  {status.isOwner && (
+                    <p className={styles.waitEstimate}>
+                      Estimated wait: ~{status.position * 3} min
+                    </p>
+                  )}
+                  {status.isOwner ? (
+                    status.canCancel ? (
+                      <button onClick={handleCancel} disabled={isCancelling} className={styles.cancelBtn}>
+                        {isCancelling ? 'Cancelling...' : 'Cancel Order'}
+                      </button>
+                    ) : (
+                      <p className={styles.cancelNote}>⏱ Cancellation window has passed</p>
+                    )
+                  ) : (
+                    <p className={styles.cancelNote}>🔒 This is not your order</p>
+                  )}
+                </div>
               )}
-            </>
+            </div>
           )}
         </div>
+
       </div>
     </div>
   );
